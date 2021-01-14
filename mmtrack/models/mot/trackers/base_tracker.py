@@ -11,6 +11,8 @@ from mmtrack.models import TRACKERS
 class BaseTracker(metaclass=ABCMeta):
     """Base tracker model.
 
+    追踪模型基类，只实现追踪功能，不用训练直接用的，其实感觉就是一些策略的集合
+
     Args:
         momentums (dict[str:float], optional): Momentums to update the buffers.
             The `str` indicates the name of the buffer while the `float`
@@ -51,11 +53,16 @@ class BaseTracker(metaclass=ABCMeta):
     def update(self, **kwargs):
         """Update the tracker.
 
+        **kwargs 的输入应该是一系列属性，每个属性单独一个key
+        除了 frame_ids 属性外，其他属性的长度（len()）应该是相同的
+        且相同下标表示的同事
+
         Args:
             kwargs (dict[str: Tensor | int]): The `str` indicates the
                 name of the input variable. `ids` and `frame_ids` are
                 obligatory in the keys.
         """
+        # 保存所有value部位None的输入数据
         memo_items = [k for k, v in kwargs.items() if v is not None]
         rm_items = [k for k in kwargs.keys() if k not in memo_items]
         for item in rm_items:
@@ -65,6 +72,8 @@ class BaseTracker(metaclass=ABCMeta):
         else:
             assert memo_items == self.memo_items
 
+        # 要求输入中必须有 ids 属性和 frame_ids 属性
+        # 前者应该是物体（人）编号列表，后者应该是当前帧编号（整数）
         assert 'ids' in memo_items
         num_objs = len(kwargs['ids'])
         id_indice = memo_items.index('ids')
@@ -74,23 +83,30 @@ class BaseTracker(metaclass=ABCMeta):
             kwargs['frame_ids'] = torch.tensor([kwargs['frame_ids']] *
                                                num_objs)
         # cur_frame_id = int(kwargs['frame_ids'][0])
+
+        # 要求所有mome_items的长度必须与物体长度相同。
         for k, v in kwargs.items():
             if len(v) != num_objs:
                 raise ValueError()
 
+        # 遍历所有现有的物体，即obj
         for obj in zip(*kwargs.values()):
             id = int(obj[id_indice])
             if id in self.tracks:
+                # 如果id已经存在，那就更新当前已经存在的tracker
                 self.update_track(id, obj)
             else:
+                # 如果id不存在，就新建对应的tracker
                 self.init_track(id, obj)
 
+        # 删除无用的tracker
         self.pop_invalid_tracks(frame_id)
 
     def pop_invalid_tracks(self, frame_id):
         """Pop out invalid tracks."""
         invalid_ids = []
         for k, v in self.tracks.items():
+            # 查看所有保存数据的帧编号，大于阈值的就删了
             if frame_id - v['frame_ids'][-1] >= self.num_frames_retain:
                 invalid_ids.append(k)
         for invalid_id in invalid_ids:
@@ -99,6 +115,7 @@ class BaseTracker(metaclass=ABCMeta):
     def update_track(self, id, obj):
         """Update a track."""
         for k, v in zip(self.memo_items, obj):
+            # 这一步是对 torch.tensor(0) 这样的数据进行处理，得到 torch.tensor([0])
             v = v[None]
             if self.momentums is not None and k in self.momentums:
                 m = self.momentums[k]

@@ -135,11 +135,14 @@ class SortTracker(BaseTracker):
             else:
                 reid_img = img.clone()
 
+        # 筛选bbox
         valid_inds = bboxes[:, -1] > self.obj_score_thr
         bboxes = bboxes[valid_inds]
         labels = labels[valid_inds]
 
         if self.empty or bboxes.size(0) == 0:
+            # 如果不存在tracker或当前帧没有bbox
+            # 那就不需要对前后帧之间的数据进行对比，所以可以特殊处理了
             num_new_tracks = bboxes.size(0)
             ids = torch.arange(
                 self.num_tracks,
@@ -155,21 +158,26 @@ class SortTracker(BaseTracker):
 
             # motion
             if model.with_motion:
+                # 通过更新前的 trackers 和当前帧的 bboxes 来预测更新后trackers的位置，并更新
                 self.tracks, costs = model.motion.track(
                     self.tracks, self.xyxy2xyah(bboxes))
 
             active_ids = self.confirmed_ids
+
             if self.with_reid:
                 embeds = model.reid.simple_test(
                     self.crop_imgs(reid_img, img_metas, bboxes[:, :4].clone(),
                                    rescale))
                 # reid
                 if len(active_ids) > 0:
+                    # 获取tracker中人物的embedding
                     track_embeds = self.get(
                         'embeds',
                         active_ids,
                         self.reid.get('num_samples', None),
                         behavior='mean')
+
+                    # 计算前后帧之间所有embedding的欧几里德距离
                     reid_dists = torch.cdist(track_embeds,
                                              embeds).cpu().numpy()
 

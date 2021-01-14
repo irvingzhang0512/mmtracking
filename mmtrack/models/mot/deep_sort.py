@@ -10,6 +10,10 @@ from .base import BaseMultiObjectTracker
 class DeepSORT(BaseMultiObjectTracker):
     """Simple online and realtime tracking with a deep association metric.
 
+    DeepSort结构的多目标跟踪框架
+    注意，这个网络只用来inference，而不是用来训练
+    训练的话，就是单独训练 detector 以及 reid
+
     Details can be found at `DeepSORT<https://arxiv.org/abs/1703.07402>`_.
     """
 
@@ -81,6 +85,8 @@ class DeepSORT(BaseMultiObjectTracker):
         if frame_id == 0:
             self.tracker.reset()
 
+        # 下面这一大段，就是怎么从 mmdet 中获取检测结果
+        # 具体细节估计就是 mmdet 的细节
         x = self.detector.extract_feat(img)
         if hasattr(self.detector, 'roi_head'):
             # TODO: check whether this is the case
@@ -106,6 +112,7 @@ class DeepSORT(BaseMultiObjectTracker):
         else:
             raise TypeError('detector must has roi_head or bbox_head.')
 
+        # 下面是通过训练结果，获取跟踪结果，细节还是参考 Tracker 相关类吧
         bboxes, labels, ids = self.tracker.track(
             img=img,
             img_metas=img_metas,
@@ -117,6 +124,7 @@ class DeepSORT(BaseMultiObjectTracker):
             rescale=rescale,
             **kwargs)
 
+        # 构建输出结果，只是改变结构，而不是修改内容
         track_result = track2result(bboxes, labels, ids, num_classes)
         bbox_result = bbox2result(det_bboxes, det_labels, num_classes)
         return dict(bbox_results=bbox_result, track_results=track_result)

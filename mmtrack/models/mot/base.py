@@ -12,7 +12,15 @@ from mmtrack.utils import get_root_logger
 
 
 class BaseMultiObjectTracker(nn.Module, metaclass=ABCMeta):
-    """Base class for multiple object tracking."""
+    """Base class for multiple object tracking.
+
+    多目标跟踪基类，定义了一些公共的功能以及对应函数。
+
+    定义了基本组件
+    基本组成部分包括：detector, reid, motion, tracker, tracker_head
+
+    定义了基本功能，包括训练/验证/计算损失函数/展示结果/量化推理
+    """
 
     def __init__(self):
         super(BaseMultiObjectTracker, self).__init__()
